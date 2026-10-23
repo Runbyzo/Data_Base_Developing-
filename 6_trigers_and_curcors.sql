@@ -49,7 +49,7 @@ DECLARE
     v_hotel_stars INTEGER;
     v_discount_coeff NUMERIC;
 BEGIN
-    -- 1. Получаем количество звезд отеля
+
     SELECT stars INTO v_hotel_stars
     FROM hotel
     WHERE id = NEW.hotel_id;
@@ -60,7 +60,7 @@ BEGIN
 
     v_discount_coeff := GREATEST(0.1, 1.0 - (5 - v_hotel_stars) * 0.1);
 
-    -- 3. Напрямую изменяем поля в объекте NEW
+
     IF NEW.price_adult IS NOT NULL THEN
         NEW.price_adult := NEW.price_adult * v_discount_coeff;
     END IF;
@@ -73,7 +73,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- 2. Пересоздаем триггер как BEFORE INSERT OR UPDATE
+
 DROP TRIGGER IF EXISTS trg_tour_price_after ON tour;
 DROP TRIGGER IF EXISTS trg_tour_price_before ON tour;
 
@@ -92,7 +92,7 @@ update tour set price_adult = 2000, price_child = 1000 where id = 2 and hotel_id
 -- 1.3 triger
 -- тригер который перед удалением отеля в таблице туров меняет hotel_id на id отеля который имеет тот же city_id что и предидущий отель
 -- 1. Ищем другой отель в том же городе 
-CREATE OR REPLACE FUNCTION fn_reassign_tour_hotel_before_delete()
+CREATE OR REPLACE function reassign_tour_hotel_before_delete()
 RETURNS TRIGGER AS $$
 DECLARE
     v_replacement_hotel_id INTEGER;
@@ -113,8 +113,26 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+drop trigger if exists trg_hotel_tour_before on hotel;
+
+create trigger trg_hotel_tour_before
+before update or delete on hotel
+for each row
+execute function reassign_tour_hotel_before_delete();
+
+insert into hotel (id, name, city_id, stars, meal_plan_id, description)
+values (17, 'best hotel in the world', 9, 5, 5, 'really good hotel');
+
+delete from tour where id = 16; 
+
+insert into 
+tour (id, name, operator_id, country_id, category_id, hotel_id, start_date, end_date, nights, price_adult, price_child, description, is_active)
+values (16, 'super cool tour', 1, 9, 5, 17, '2026-11-20', '2026-11-25', 5, 1900, 950, 'this tour is kinda cool', false);
+
+delete from hotel where id = 17;
+
 -- 2.1 cursor
--- курсор проходится построчно по 
+-- курсор проходится построчно по турам и выводит id, и цены
 do $$ 
 declare 
 	curs cursor for select id, price_adult, price_child from tour;
@@ -152,7 +170,3 @@ begin
 end; $$ language plpgsql;
 
 select * from get_some_tour_data();
-
-
-	
- 
